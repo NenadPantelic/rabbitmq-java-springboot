@@ -17,7 +17,7 @@ public class FixedRateProducer {
         this.rabbitTemplate = rabbitTemplate;
     }
 
-    @Scheduled(fixedRate = 500)
+//    @Scheduled(fixedRate = 500)
     public void sendMessage() {
         counter++;
         LOG.info("Sending {}...", counter);
