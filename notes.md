@@ -184,3 +184,19 @@ rabbitmqctl set_permissions -p / test ".*" ".*" ".*"
   3. `*.*.svg` - `q.picture.vector`
   4. `mobile.#` or `mobile.*.*` - `q.picture.mobile`
   5. `*.large.svg` - `q.picture.log`
+
+## Handling error
+
+### Dead letter exchange
+
+- exception may happen
+- Spring by default requeues the message which delivery failed
+- But if the error is permanent (e.g. message to big), it will fail every time when delivery is attempted - infinite consumer loop
+- send a problematic message to DLX with requeue = false (DLX = dead letter exchange) - the problematic message goes to a different queue then depending on the binding of DLX (a different consumer should handle such messages)
+- also works for timeout (when the message times out, it will be sent to DLX)
+
+### TTL - Time to live
+
+- the time in milliseconds that a message can live in a queue without any consumer picking it up
+- after TTL passed, the message is dead
+- queue can be configured to send "dead" messages to DLX

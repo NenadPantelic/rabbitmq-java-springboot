@@ -1,6 +1,5 @@
 package com.np.rabbitmq.producer;
 
-import com.np.rabbitmq.producer.dto.Employee;
 import com.np.rabbitmq.producer.dto.Picture;
 import com.np.rabbitmq.producer.producer.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,7 +8,6 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -39,6 +37,9 @@ public class Application implements CommandLineRunner {
     @Autowired
     private PictureProducerTwo pictureProducerTwo;
 
+    @Autowired
+    private MyPictureProducer myPictureProducer;
+
     @Override
     public void run(String... args) throws Exception {
         //   helloRabbitProducer.sendHello("My name " + ThreadLocalRandom.current().nextInt());
@@ -67,8 +68,21 @@ public class Application implements CommandLineRunner {
 //        }
 
         // topic exchange producer
+//        for (int i = 0; i <= 10; i++) {
+//            var size = ThreadLocalRandom.current().nextInt(100, 10000);
+//            var picture = new Picture(
+//                    "name-" + i,
+//                    TYPES.get(i % TYPES.size()),
+//                    SOURCES.get(i % SOURCES.size()),
+//                    size
+//            );
+//
+//            pictureProducerTwo.sendMessage(picture);
+//        }
+
+        // error producer
         for (int i = 0; i <= 10; i++) {
-            var size = ThreadLocalRandom.current().nextInt(100, 10000);
+            var size = ThreadLocalRandom.current().nextInt(9001, 10000);
             var picture = new Picture(
                     "name-" + i,
                     TYPES.get(i % TYPES.size()),
@@ -76,7 +90,7 @@ public class Application implements CommandLineRunner {
                     size
             );
 
-            pictureProducerTwo.sendMessage(picture);
+            myPictureProducer.sendMessage(picture);
         }
     }
 }

@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: rabbitmq.consumer
+
+  rabbitmq:
+    addresses: "localhost:5672"
+    username: test
+    password: test
+    listener:
+      simple:
+        acknowledgment-mode: manual
