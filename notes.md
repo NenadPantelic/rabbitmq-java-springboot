@@ -200,3 +200,126 @@ rabbitmqctl set_permissions -p / test ".*" ".*" ".*"
 - the time in milliseconds that a message can live in a queue without any consumer picking it up
 - after TTL passed, the message is dead
 - queue can be configured to send "dead" messages to DLX
+
+- Two options
+  - automatic exception throwing
+  - manual reject + acknowledgment (risky, prone to dev mistake)
+
+## Headers exchange
+
+- multiple criteria in message header (instead of the routing key)
+- special header - `x-match`
+
+  - `all` (default): boolean `AND`
+  - `any`: boolean `OR`
+
+- Example:
+  - criterias: color, material
+  - promotion: discount, free delivery
+  - details:
+    - white AND wood = discount
+    - red AND steel = discount
+    - red OR wood = free delivery
+
+## Retry mechanism
+
+- requeue or send to DLX
+- retry after x seconds, n times; after that, send to DLX
+
+- Example:
+
+1. work - `x.guideline.work` and `q.guideline.image.work` - primary business process that does the heavylifting; if an exception occurs, it will trigger the retry mechanism
+2. wait - `x.guideline.wait` and `q.guideline.image.wait` - invalid message will be kept here for some time before sending again to work exchange/queue (ttl and dlx)
+3. dead - `x.guideline.dead` and `q.guideline.image.dead` - message where all attempts failed are stored here
+
+- wait is DLX for work and dead
+- work is DLX & TTL for wait
+- `ImageConsumer` - consumes work, rejects to wait and republishes to dead
+- `DeadImageConsumer` - consumes from dead queue
+
+- Exchanges:
+  1. `x.guideline.work`
+  2. `x.guideline.wait`
+  3. `x.guideline.dead`
+- Queues:
+  1. `q.guideline.image.work`
+  2. `q.guideline.image.wait`
+  3. `q.guideline.image.dead`
+  4. `q.guideline.vector.work`
+  5. `q.guideline.vector.wait`
+  6. `q.guideline.vector.dead`
+
+#### Consumer with retry mechanism
+
+1. Check retry limit
+2. if the retry limit is less than threshold, send message to wait exchange
+3. otherwise, send message to dead exchange
+
+- RabbitMQ message has a header telling how many retries have been tried to process this message - `X-Death` (retry count)
+
+### Fanout exchange retry
+
+- 4 exchanges:
+
+1. `x.guideline2.work`
+2. `x.guideline2.retry`
+3. `x.guideline2.wait`
+4. `x.guideline2.dead`
+
+- 3 queues:
+
+1. `q.guideline2.accounting.work`
+2. `q.guideline2.accounting.wait`
+3. `q.guideline2.accounting.dead`
+
+- Bindings:
+
+1. `x.guideline2.work` -> `q.guideline2.accounting.work`
+2. `q.guideline2.work` -> DLX -> `x.guideline2.wait`
+3. `x.guideline2.wait` -> `q.guideline2.accounting.wait`
+4. `q.guideline2.accounting.wait` -> DLX & TTL -> `q.guideline2.accounting.wait`
+5. `x.guideline2.retry` -> routes invalid messages -> `q.guideline2.accounting.work`. We need a direct exchange here, not fanout because otherwise if this exchange is fanout also, all queues binded to it will receive the same message after requeue and that means some of them which successfully processed the message the first time when it arrived now will process it again processing duplicate messages.
+
+- `AccountingConsumer`
+
+1. consumes from `x.guideline2.work`
+2. rejects to `x.guideline2.wait`
+3. publishes to `x.guideline2.dead`
+
+- `DeadAccountingConsumer`
+
+1. consumes from `q.guideline2.accounting.dead`
+
+#### Consumer with retry mechanism
+
+1. Check retry limit
+2. if the retry limit is less than threshold, send message to wait exchange (direct exchange, use correct routing key)
+3. otherwise, send message to dead exchange
+
+## RabbitMQ vs Apache Kafka
+
+### Message retention
+
+- Kafka: by policy (defines a retention policy, in that period the message is hold on disk)
+- RabbitMQ: by acknowledgment
+
+- in Kafka multiple consumers can consume the same message; stores on disk everything
+- in RabbitMQ if we want to have multiple consumers consuming the same message, the publisher must publish it; stores on disk or in memory
+
+### Message routing
+
+- Kafka: no routing mechanism, publisher publishes a message to some topic (and partition)
+- RabbitMQ: routing mechanism using exchange, so messages are routed using a key
+
+### Multiple consumers
+
+- Kafka: topic - partition - one consumer per partition, guaranteed order
+- RabbitMQ: multiple consumers per queue (suitable for fast producer, slow consumer), order not guaranteed (consumers are competing against each other)
+
+### Consumer push/pull model
+
+- Kafka: consumer pulls from Kafka topic; only one consumer accesses one partition
+- RabbitMQ: pushes message to consumer; to prevent the consumer overload, a consumer can set the prefetch limit (the number of unprocessed messages it can accept; helps in fair distribution of messages accross consumers)
+
+- RabbitMQ is easier to manage
+- Kafka is more scalable & good for big data

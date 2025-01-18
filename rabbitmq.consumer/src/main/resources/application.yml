@@ -8,4 +8,5 @@ spring:
     password: test
     listener:
       simple:
+        # needed for retry consumer
         acknowledgment-mode: manual
