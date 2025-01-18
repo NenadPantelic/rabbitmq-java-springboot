@@ -9,4 +9,12 @@ spring:
     listener:
       simple:
         # needed for retry consumer
-        acknowledgment-mode: manual
+#        acknowledgment-mode: manual
+        retry:
+          # must use automatic ack mode
+          enabled: true
+          initial-interval: 3s
+          max-interval: 10s
+          max-attempts: 5
+          multiplier: 2
+

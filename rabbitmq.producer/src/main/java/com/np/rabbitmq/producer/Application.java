@@ -59,6 +59,12 @@ public class Application implements CommandLineRunner {
     @Autowired
     private ReportRequestProducer reportRequestProducer;
 
+    @Autowired
+    private SpringPictureProducer springPictureProducer;
+
+    @Autowired
+    private SpringEmployeeJsonProducer springEmployeeJsonProducer;
+
     @Override
     public void run(String... args) throws Exception {
         //   helloRabbitProducer.sendHello("My name " + ThreadLocalRandom.current().nextInt());
@@ -141,12 +147,34 @@ public class Application implements CommandLineRunner {
 //            retryEmployeeJsonProducer.sendMessage(employee);
 //        }
 
-        boolean large = true;
-        for (int i = 0; i < 10; i++) {
-            var reportRequest = new ReportRequest("reportreq-" + i, large);
-            large = !large;
-            System.out.printf("Producing %s\n", reportRequest);
-            reportRequestProducer.sendMessage(reportRequest);
-        }
+        // delayed messages
+//        boolean large = true;
+//        for (int i = 0; i < 10; i++) {
+//            var reportRequest = new ReportRequest("reportreq-" + i, large);
+//            large = !large;
+//            System.out.printf("Producing %s\n", reportRequest);
+//            reportRequestProducer.sendMessage(reportRequest);
+//        }
+
+        // Spring retry - direct exchange
+//        var picture = new Picture(
+//                "Spring picture",
+//                "jpg",
+//                "web",
+//                9500
+//        );
+//        System.out.printf("Producing %s\n", picture);
+//        springPictureProducer.sendMessage(picture);
+
+        // Spring retry - fanout exchange
+        var employee = new Employee(
+
+                "123",
+                null,
+                LocalDate.now()
+        );
+        System.out.printf("Producing %s\n", employee);
+        springEmployeeJsonProducer.sendMessage(employee);
+
     }
 }

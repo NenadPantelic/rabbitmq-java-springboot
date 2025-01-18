@@ -364,3 +364,42 @@ rabbitmq-plugins enable rabbitmq_shovel_management
 
 - `cloudamqp.com`
 - free to use (basic functionalities for free plan)
+
+## Spring Retry mechanism
+
+### Direct exchange
+
+- no code
+- configuration in `application.yml`
+- define interval for retry
+- define maximum retry attempts
+- retry interval multiplier
+
+- Example, 2 exchanges:
+  1. `x.spring.work` -> based on image type sends jpg/png to `q.spring.image.work` and svg to `q.spring.vector.work`
+  2. `x.spring.dead` -> DLX from `q.spring.image.work` and `q.spring.vector.work` go to this exchange. It routes messages based on type:
+     - jpg/png to `q.spring.image.dead`
+     - svg to `q.spring.vector.dead`
+- no "wait" exchange, Spring will handle that for us
+- one consumer class, two methods
+
+- Exchanges:
+  - `x.spring.work`
+- Queues:
+  - `q.spring.image.work`
+  - `q.spring.vector.work`
+
+### Fanout exchange
+
+- Example, 2 exchanges:
+
+  1. `x.spring2.work` -> sends/fans out messages `q.spring2.accounting.work` and `q.spring2.marketing.work`
+  2. `x.spring2.dead` -> DLX from `q.spring2.accounting.work` and `q.spring2.marketing.work` to this exchange. It routes messages by routing key (direct exchange):
+     - `dead-accounting` to `q.spring2.accounting.dead`
+     - `dead-marketing` to `q.spring2.marketing.dead`
+
+- Exchanges:
+  - `x.spring.work`
+- Queues:
+  - `q.spring.image.work`
+  - `q.spring.vector.work`
