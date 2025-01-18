@@ -3,6 +3,7 @@ package com.np.rabbitmq.producer;
 import com.np.rabbitmq.producer.dto.Furniture;
 import com.np.rabbitmq.producer.dto.Picture;
 import com.np.rabbitmq.producer.dto.Employee;
+import com.np.rabbitmq.producer.dto.ReportRequest;
 import com.np.rabbitmq.producer.producer.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
@@ -54,6 +55,9 @@ public class Application implements CommandLineRunner {
 
     @Autowired
     private RetryEmployeeJsonProducer retryEmployeeJsonProducer;
+
+    @Autowired
+    private ReportRequestProducer reportRequestProducer;
 
     @Override
     public void run(String... args) throws Exception {
@@ -130,11 +134,19 @@ public class Application implements CommandLineRunner {
 //            System.out.printf("Producing %s\n", picture);
 //            retryPictureProducer.sendMessage(picture);
 //        }
+        // retry producer (fanout exchange)
+//        for (int i = 0; i < 10; i++) {
+//            var employee = new Employee("emp-" + i, null, LocalDate.now());
+//            System.out.printf("Producing %s\n", employee);
+//            retryEmployeeJsonProducer.sendMessage(employee);
+//        }
 
+        boolean large = true;
         for (int i = 0; i < 10; i++) {
-            var employee = new Employee("emp-" + i, null, LocalDate.now());
-            System.out.printf("Producing %s\n", employee);
-            retryEmployeeJsonProducer.sendMessage(employee);
+            var reportRequest = new ReportRequest("reportreq-" + i, large);
+            large = !large;
+            System.out.printf("Producing %s\n", reportRequest);
+            reportRequestProducer.sendMessage(reportRequest);
         }
     }
 }

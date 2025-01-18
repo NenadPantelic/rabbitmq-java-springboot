@@ -323,3 +323,44 @@ rabbitmqctl set_permissions -p / test ".*" ".*" ".*"
 
 - RabbitMQ is easier to manage
 - Kafka is more scalable & good for big data
+
+## RabbitMQ plugins
+
+- https://www.rabbitmq.com/docs/plugins
+
+```
+docker exec -it rabbitmq bash
+rabbitmq-plugins enable plugin-name
+# e.g.
+rabbitmq-plugins enable rabbitmq_shovel_management
+#  disable plugin
+rabbitmq-plugins disable plugin-name
+# e.g.
+rabbitmq-plugins enable rabbitmq_shovel_management
+```
+
+### Delayed message exchange
+
+- use case:
+  - some reports contain very large data (heavy processing & affects the system performance)
+  - report listener process all reports immediately (fixed process)
+  - workaround: publish large report requests after 19:00; delay publish process, listener still process immediately
+- RabbitMQ does not natively support delayed publishing
+- use plugin Delayed Message (community plugin)
+- hold message until specified delay time, then publish it
+  - install plugin
+  - use exchange type `x-delayed-message`
+  - add header on message, indicating delay duration
+  - published after the delay period elapses
+- check the location of the plugin folder: `rabbitmq-plugins directories -s`
+- copy the binary into a container - `docker cp rabbitmq_delayed_message_exchange-3.12.0.ez rabbitmq:/opt/rabbitmq/plugins`
+- enable plugin: `rabbitmq-plugins enable rabbitmq_delayed_message_exchange`
+- Example:
+  - 1 exchange - `x.delayed`; have to set `x-delayed-type: direct` (any exchange type)
+  - 1 queue - `q.delayed`
+  - bind using routing key `delayThis`
+
+## RabbitMQ in cloud
+
+- `cloudamqp.com`
+- free to use (basic functionalities for free plan)

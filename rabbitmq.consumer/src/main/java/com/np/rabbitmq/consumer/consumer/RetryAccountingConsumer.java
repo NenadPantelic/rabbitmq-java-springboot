@@ -25,7 +25,7 @@ public class RetryAccountingConsumer {
         this.dlxProcessingErrorHandler = new DlxProcessingErrorHandler(DEAD_EXCHANGE_NAME);
     }
 
-    @RabbitListener(queues = "q.guideline2.accounting.work")
+//    @RabbitListener(queues = "q.guideline2.accounting.work")
     public void listen(Message message, Channel channel, @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag) {
         try {
 

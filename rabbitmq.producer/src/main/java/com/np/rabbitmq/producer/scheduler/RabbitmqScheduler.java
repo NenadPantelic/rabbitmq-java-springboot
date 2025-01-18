@@ -18,7 +18,7 @@ public class RabbitmqScheduler {
         this.rabbitmqClient = rabbitmqClient;
     }
 
-    @Scheduled(fixedRate = 90000)
+//    @Scheduled(fixedRate = 90000)
     void sweepDirtyQueues() {
         try {
             var dirtyQueues = rabbitmqClient.getAllQueues()

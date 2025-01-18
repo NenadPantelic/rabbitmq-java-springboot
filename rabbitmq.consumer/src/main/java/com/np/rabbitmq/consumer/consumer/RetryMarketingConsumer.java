@@ -24,7 +24,7 @@ public class RetryMarketingConsumer {
         this.objectMapper = objectMapper;
     }
 
-    @RabbitListener(queues = "q.guideline2.marketing.work")
+//    @RabbitListener(queues = "q.guideline2.marketing.work")
     public void consume(Message message, Channel channel, @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag) throws IOException {
         var employee = objectMapper.readValue(message.getBody(), Employee.class);
         LOG.info("[Marketing] Consumed employee: {}", employee);
