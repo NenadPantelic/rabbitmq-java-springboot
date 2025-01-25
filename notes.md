@@ -403,3 +403,137 @@ rabbitmq-plugins enable rabbitmq_shovel_management
 - Queues:
   - `q.spring.image.work`
   - `q.spring.vector.work`
+
+## Advanced concepts
+
+### JSON message converter
+
+- `SimpleMessageConverter` - String <-> RabbitMQ
+- `Jackson2JsonMessageConverter` - Java object <-> RabbitMQ (with JSON as body)
+- Example:
+  - fanout exchange `x.dummy` -> `q.dummy`
+- entity being serde must have the same path (package + name) on both sides
+
+### Scheduling consumer
+
+- schedule turning on/off for consumer if we want that it is active only at certain time
+- `[fanout] x.dummy` -> `q.dummy`
+
+### Consumer prefetch
+
+- RabbitMQ can send several messages to its consumer. However consumer can process only one message at time. A consumer receives a message, acknowledges it and it stays in its memory. Meaning, those message are unacknowledged and received by consumer.
+- Spring has a prefetch config set to 250. What does this mean?
+  - if we have 500 messages in a queue and two consumers
+  - then 250 messages will be pushed to consumer 1 and 250 to consumer 2 and queue will be empty
+  - the problem: what if message processing is taking too much time. Then these two consumers will have of all the messages and even if we add another consumer, it will not have any message to process.
+- Spring allows us to set the prefetch value:
+  - for fast message processing time:
+    - one or few consumers -> larger consumer prefetch number
+    - many -> moderate consumer prefetch number (too small value, consumers are idle, too big number, one of them is super busy, while others are mostly idle)
+  - for slow message processing time -> consumer prefetch = 1
+- RabbitMQ schema:
+  - `[fanout] x.dummy` -> `q.dummy`
+
+### Multiple prefetch values
+
+- Example:
+  - `x.transaction` -> `q.transaction` -> 100 ms/message (fast processing time) -> high prefetch value (e.g. Spring's default 250)
+  - `x.scheduler` -> `q.scheduler` -> 1 minute/message (slow) -> prefetch value = 1
+
+### Message order
+
+- messages come to queue in order
+- what about the consumer?
+  - if we have only one consumer, then the consuming order is guaranteed
+  - if we have multiple consumers, then the message consumption order is not guaranteed
+- Impact:
+  - message: invoice-created, invoice-updated, invoice-paid
+  - we have a problem if they are not processed in order when we have multiple consumers - e.g. consumer 1 takes `invoice-created` and `invoice-updated` while consumer 2 takes a message `invoice-paid`. An option is that consumer1 processes `invoice-created` and then consumer 2 processes `invoice-paid` and then after that consumer 1 processes `invoice-updated`.
+
+### Multiple message types
+
+### One queue for one message type
+
+- `x.invoice` -> `q.invoice.paid` with routing key `paid`; one type of message
+- `q.invoice.created` with routing key `created`; second type of message
+
+### One queue for multiple message types
+
+- `x.invoice` -> `q.invoice` which contains two types of messages and in header `TypeID` we can set the message type (e.g. `invoice.created` and `invoice.paid`)
+
+### Pros and cons
+
+- maintain queues
+  - one queue/message type - many queues
+  - one queue + multiple message types - less queue
+- consumer code
+  - one queue/message type - relatively easy
+  - one queue + multiple message types need to filter message; might be harder if not using Spring
+
+#### One queue + multiple message types
+
+- Example:
+
+  - `[fanout] x.invoice` -> `q.invoice`
+
+- `@RabbitListener`
+  - on class
+    - combined with `@RabbitHandler`
+    - invoke different method based on payload
+
+### Consistent hash exchange
+
+- How to achieve message order and multiple consumers in RabbitMQ?
+- hash: mathematical function that converts an input to a consistent numerical value output
+- RabbitMQ has a plugin for consistent hash exchange
+- Example:
+  - 4 messages in a queue - XYYX; PAID (4) PAID (3) NEW (2) NEW (1)
+  - `x.invoice` and `q.invoice`
+  - First and third message are processed by consumer 1 and second and fourth by consumer 2
+  - Consumer 1 needs 1 second to process each message and consumer 2 needs 3 second to process each message
+  - in second 2, consumer 1 has already finished the process; data based on invoice Y is now PAID
+  - slower consumer, consumer 2 finishes processing invoice Y at the second 3; the problem is at second 2 data for invoice Y is already on PAID status; so at second 3 status is rewritten to NEW; it should be PAID by message order
+  - one queue per invoice would solve the problem since it guarantees the message order -> `q.invoice.one` and `q.invoice.two`
+- How different exchanges will distribute invoices?
+  - turn exchange: odd messages will go to the first queue, even ones to the second queue
+    - Y(PAID)X(NEW) -> consumer 1
+    - X(PAID)Y(NEW) -> consumer 2
+    - consumer 1 is faster and will still process the blue invoice first and consumer 2 process later; we still have the wrong status of Y
+- Consistent hashing exchange distributes routing keys among queues instead of messages, all messages with the same routing key will go to the same queue. We use the identifier of the invoice (X or Y) as routing key. RabbitMQ will calculate the hash and all messages with the same routing key will go to the same queue. E.g. all messages with identifier X will be hashed to queue one and messages with routing key Y will be hashed and routed to queue 2.
+- What is the problem - the message distribution might change if we change the number of queues; if we have to change the number of queues, we better do it when there are no pending messages
+
+- Example:
+  - `x.invoice`
+  - `q.invoice.one` and `q.invoice.two`
+  - routing key is ratio - `q.invoice.one` is 2n (receives twice as many messages as queue 2) and for `q.invoice.two` - n
+
+### Single active consumer
+
+- only one consumer per queue -> `x-single-active-consumer`
+- guaranteed message order
+- if we have two consumers and we set only one active consumer (app). If that consumer dies, the other one is automatically turned on
+
+### Reliable publish
+
+- is my message published?
+- something wrong? (invalid exchange; correct exchange, invalid routing key)
+- publisher can confirm (tells to Java code if the message is really published)
+- async callback from RabbitMQ server to publisher; we have to add correlated data so we can track which message and which callback
+
+  ```yml
+  spring:
+    rabbitmq:
+      publisher-confirm-type: correlated
+      publisher-returns: true
+      template:
+        mandatory: true
+  ```
+
+- `[direct] x.dummy2 -> (routing key dummy2) -> q.dummy2`
+
+### Request/Reply
+
+- publisher sends a message to `x.invoice` which routes it to `q.invoice`
+- if something goes wrong in consumer in its business logic, e.g. it should remove some funds from someone's account or add it, then a rollback event should happen
+- consumer then sends an invoice cancel message to `x.invoice.cancel` and it routes it to `q.invoice.cancel` and that message is consumed by Payment cancelation service (consumer)
+- This pattern is known as **request/reply**. Request direction goes to `x.invoice` and `q.invoice`, while the reply direction goes from invoice consumer to `x.invoice.cancel` and `q.invoice.cancel`

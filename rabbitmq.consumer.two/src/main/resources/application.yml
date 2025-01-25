@@ -1,0 +1,8 @@
+spring:
+  application:
+    name: rabbitmq.consumer.two
+
+  rabbitmq:
+    listener:
+      simple:
+        prefetch: 1
