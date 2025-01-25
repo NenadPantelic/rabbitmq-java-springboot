@@ -39,6 +39,9 @@ public class Application implements CommandLineRunner {
     @Autowired
     private Invoice2Producer invoice2Producer;
 
+    @Autowired
+    private AnotherDummyProducer anotherDummyProducer;
+
     @Override
     public void run(String... args) throws Exception {
 //        var dummyMessage = new DummyMessage("Content", 1);
@@ -97,15 +100,19 @@ public class Application implements CommandLineRunner {
 //        reliableProducer.sendDummyMessageWithInvalidRoutingKey(dummyMessage);
 //        reliableProducer.sendDummyMessageToNonExistentExchange(dummyMessage);
 
-        for (int i = 0; i < 10; i++) {
-            var invoiceNumber = "INV-" + i;
-            var invoiceCancelledMessage = new InvoiceCancelledMessage(
-                    LocalDate.now(),
-                    invoiceNumber,
-                    "Invoice cancelled " + i
-            );
+        // request-reply pattern
+//        for (int i = 0; i < 10; i++) {
+//            var invoiceNumber = "INV-" + i;
+//            var invoiceCancelledMessage = new InvoiceCancelledMessage(
+//                    LocalDate.now(),
+//                    invoiceNumber,
+//                    "Invoice cancelled " + i
+//            );
+//
+//            invoice2Producer.sendInvoiceCancelled(invoiceCancelledMessage);
+//        }
 
-            invoice2Producer.sendInvoiceCancelled(invoiceCancelledMessage);
-        }
+        var dummyMessage = new DummyMessage("Content", 1);
+//        anotherDummyProducer.sendMessage(dummyMessage);
     }
 }
