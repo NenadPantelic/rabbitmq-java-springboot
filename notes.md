@@ -537,3 +537,49 @@ rabbitmq-plugins enable rabbitmq_shovel_management
 - if something goes wrong in consumer in its business logic, e.g. it should remove some funds from someone's account or add it, then a rollback event should happen
 - consumer then sends an invoice cancel message to `x.invoice.cancel` and it routes it to `q.invoice.cancel` and that message is consumed by Payment cancelation service (consumer)
 - This pattern is known as **request/reply**. Request direction goes to `x.invoice` and `q.invoice`, while the reply direction goes from invoice consumer to `x.invoice.cancel` and `q.invoice.cancel`
+
+## Stream
+
+- has a similar task as queue, but messages are stored and consumed differently
+- new message is appended to the end of the stream
+- in a queue, once the message is consumed by a consumer, it is removed from the queue, meaning only one ocnsumer consumes a message
+- messages in stream are read by using the `non-destructive consumer semantic`
+  - message stays in a stream even after some consumer read it, so multiple consumers can read the same message
+  - the only way to remove a message from a stream is to set max-age (similar to TTL) - how long the message remains in a stream; after that time it elapses and will be removed from stream
+- use cases:
+
+  - large fan-outs
+  - replay (time-travelling) - once read, messages from queue are removed, while in streams we can go back to any position and replay the message reading
+  - performance - better performance than queues
+  - large backlog
+    - RabbitMQ are optimized for emptying quickly and may perform poorly with millions of messages
+    - streams efficiently store large volumes of data with minimal in-memory overhead
+
+- Queues vs streams
+
+| Aspect               | Queue                                                                                   | Stream                                                                                                                                                   |
+| -------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Queue durability     | Can be durable (permanent queue)/transient (temporary queue, deleted on server restart) | Always durable                                                                                                                                           |
+| Message durability   | Need setting onqueue and per-message delivery mode                                      | Always durable                                                                                                                                           |
+| Lazy mode            | Can be lazy (data stored on disk) or no (data stored in-memory)                         | Always lazy (data stored on disk). Streams store all data directly on disk, after a message has been written it does not use any memory until it is read |
+| Prefetch             | Supports global prefetch for all consumers                                              | Requires per-consumer prefetch                                                                                                                           |
+| Message live time    | Setting via TTL (Time To Live)                                                          | Setting via retention (max-age)                                                                                                                          |
+| Dead letter exchange | Yes                                                                                     | No                                                                                                                                                       |
+
+- coding and RabbitMQ streams
+  - off-the self RabbitMQ feature
+  - for coding, we need to enable `rabbitmq stream plugin`
+    - create/delete stream
+    - publish/consume
+  - using port 5552
+  - set `advertised_host`
+  - optionally - set `advertised_port`
+- use `org.springframework.amqp:spring-rabbit-stream`
+- To publish to stream directly, we can use `RabbitStreamTemplate` (one per stream) - for high throuhput. To publish via exchange we can use `RabbitTemplate` and `RabbitListener` to consume it.
+
+```
+docker run -d --restart always --name rabbitmq --hostname docker-rabbitmq -p 5672:5672 -p 15672:15672 -p 5552:5552  -e RABBITMQ_DEFAULT_USER=admin -e RABBITMQ_DEFAULT_PASS=admin -e RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS="-rabbitmq_stream_advertised_host_localhost" -v ./data:/var/lib/rabbitmq/mnesia rabbitmq:3.12-management
+```
+
+- Stream can be bound to any exchange: `[direct] x.hello` -> `s.hello (stream)` and `q.hello (queue)`
+- Stream consumer reads messages produced just after its activation

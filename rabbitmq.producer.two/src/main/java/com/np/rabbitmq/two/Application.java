@@ -42,6 +42,9 @@ public class Application implements CommandLineRunner {
     @Autowired
     private AnotherDummyProducer anotherDummyProducer;
 
+    @Autowired
+    private StreamHelloProducer streamHelloProducer;
+
     @Override
     public void run(String... args) throws Exception {
 //        var dummyMessage = new DummyMessage("Content", 1);
@@ -112,7 +115,16 @@ public class Application implements CommandLineRunner {
 //            invoice2Producer.sendInvoiceCancelled(invoiceCancelledMessage);
 //        }
 
-        var dummyMessage = new DummyMessage("Content", 1);
+//        var dummyMessage = new DummyMessage("Content", 1);
 //        anotherDummyProducer.sendMessage(dummyMessage);
+
+        // stream producer
+        streamHelloProducer.sendHello("Hello 1");
+        streamHelloProducer.sendHello("Hello 2");
+        streamHelloProducer.sendHello("Hello 3");
+
+        streamHelloProducer.sendHelloUsingExchange("Hello 1");
+        streamHelloProducer.sendHelloUsingExchange("Hello 2");
+        streamHelloProducer.sendHelloUsingExchange("Hello 3");
     }
 }

@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RabbitmqSchemaConfig {
 
-    @Bean
+//    @Bean
     FanoutExchange fanoutExchange() {
         return new FanoutExchange("x.another-dummy", true, false, null);
     }
@@ -25,13 +25,13 @@ public class RabbitmqSchemaConfig {
     }
 
     /// queue ///
-    @Bean
+//    @Bean
     Queue queue() {
         return new Queue("q.another-dummy", true, false, false);
     }
 
     /// binding ///
-    @Bean
+//    @Bean
     Binding binding() {
         return new Binding(
                 "q.another-dummy",
@@ -49,7 +49,7 @@ public class RabbitmqSchemaConfig {
 
     //// another way ////
     // put everything in declarable
-    @Bean
+//    @Bean
     // safe way, idempotent
     Declarables createRabbitmqSchema() {
         return new Declarables(
