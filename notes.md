@@ -583,3 +583,152 @@ docker run -d --restart always --name rabbitmq --hostname docker-rabbitmq -p 567
 
 - Stream can be bound to any exchange: `[direct] x.hello` -> `s.hello (stream)` and `q.hello (queue)`
 - Stream consumer reads messages produced just after its activation
+
+## Offset tracking
+
+- offset is like an index in a queue
+- every consumer tracks its offset
+- a consumer can start reading messages from a particular offset specification
+- apart from the offset number, every message has a timestamp when it was received
+- a consumer can choose to start consuming from a specific timestamp
+- stream stores messages in batches (of 10_000) for performance reasons. So, if a stream has 17000 messages, they will be stored in 2 batches.
+- offset specifications:
+  1. first - consume from the very beginning of the stream
+  2. (default) next - consume from the next incoming message
+  3. last - from the beginning of the last batch
+- offset is stored as part of the RabbitMQ stream; RMQ server tracks offsets for each consumer
+- each consumer must have a name
+  - should be unique per consumer
+  - name stays the same after the consumer restarts
+- RabbitMQ does not enforce the name uniqueness per consumer
+- multiple stream consumer instances with the same name might interleave wehn consuming from a stream; mess with offset and events (e.g. processing the same message multiple times)
+
+- Example:
+  - `[fanout] x.number` -> `s.number (stream)`
+- Offset types in Spring:
+  1. absolute
+  2. first
+  3. last
+  4. next (default)
+  5. timestamp
+
+1.
+
+```java
+@RabbitListener(queue = "mystream")
+void listen(String s) {
+
+}
+```
+
+2.
+
+```java
+@RabbitListener(queue = "mystream")
+void listen(org.springframework.amqp.core.Message message) {
+
+}
+```
+
+3.
+
+```java
+
+@RabbitListener(queue = "mystream", containerFactory = "myCf")
+void listen(
+  com.rabbitmq.stream.Message message,
+  com.rabbitmq.stream.MessageHandler.Context ctx
+)
+```
+
+- Define a container factory with offset type
+
+```java
+
+@Bean
+RabbitListenerContainerFactory<StreamListenerContainer> myContainerFactory(Environment environment) {
+  var factory = new StreamRabbitListenerContainerFactory(environment);
+  factory.setNativeListener(true);
+
+  // other factory setting
+  return factory;
+}
+
+```
+
+- `factory.nativeListener` by default is false - RabbitListener will not take message data type and context as input
+- the default tracking strategy is - `builder.autoTrackingStrategy()` -> code will automatically update offset, no need to it manually
+- when using `builder.offset()`, we must set consumer name using `builder.name()`
+
+#### Consumer goes first
+
+- 5 messages produced when the producer is activated (0-indexed); consumer active before that
+  |Consumer's offset type | Messages consumed |
+  |---|---|
+  | Absolute (example: start with offset 3) | 3, 4|
+  | First | 0, 1, 2, 3, 4 |
+  | Last | 0, 1, 2, 3, 4 |
+  | Next | 0, 1, 2, 3, 4 |
+  | Timestamp (T-5 minutes) | 0, 1, 2, 3, 4 |
+  | Default (using default offset: next) | 0, 1, 2, 3, 4 |
+
+- **Offset tracking stored in stream itself, as additional messages in stream, but it does not interfere with the consumer logic that listens to stream and consumes messages (the number of messages increases by some rule, time or number of messages)**
+- **avoid making decisions based on offset values, might not behave as expected**
+
+#### Producer goes first
+
+- producer is activated first, produced 5 messages and then the consumer is brought up
+  | Consumer's offset type | Message consumed | Notes |
+  |---|---|---|
+  |Absolute (example: start with offset 3) |3, 4 | Starts from anm absolute offset|
+  | First | 0,1,2,3,4 | Starts from the beginning |
+  | Last | 0,1,2,3,4 | No stored offset, so starts from the beggining|
+  | Next | - | Does not take the existing data from stream |
+  | Timestamp (T-5 minutes) | - | In this example, data in the stream is older than 5 minutes|
+  | Default (using default offset: next) | - | See "next" |
+
+#### Manual offset tracking
+
+- manually update the offset
+- if the consumer does not update its offset, when restarted, it will start reprocessing messages from the beginning
+- storing the offset is quick operation, but every offset update means the stream is getting bigger
+- store offset every few thousand messages; if the consumer is restarted it might happen that the stored offset is behind the last processed message which leads to reprocessing the same messages (that were already processed)
+- make consumer idempotent
+
+## Single active consumer (stream)
+
+- Queue - if we have multiple consumers, then each instance receives a different message
+- Stream - if we have multiple consumers, then all of them receive all messages (message stay in stream)
+
+- if we have a single active consumer, it may happen that some messages are reprocessed when another instance of queue takes over
+- why is that so?
+  - well the offset is stored in stream and it's not stored per message, but at same interval/no of messages
+  - so, that means when one consumer is brought down and another consumer instance takes over, it will start from the offset that is stored in stream, despite the fact that messages might be processed by the first consumer after the offset had been stored. So messages with an offset larger than the last stored one wil be reprocessed.
+
+## Super Stream
+
+- a logical stream of an exchange and several streams. From an application perspective, those "several streams" are seens as a single stream
+- each stream can be seen as stream partition
+- so, we can enable a single active consumer and then with superstream streams, every consumer listens to just one stream having a parallel processing without duplicate processing
+- for redundancy sake, we can have multiple instance consumers per consumer group, in case one consumer goes down, another instance can jump in and take over the processing
+
+### Super stream in RabbitMQ vs Kafka
+
+- RabbitMQ super stream is similar to Kafka's topic & partition
+- many technical details are left, but in the essence, they are the same
+- Example:
+  - exchange: `s.super.stream`
+  - three streams: `s.super-stream-0`, `s.super-stream-1` and `s.super-stream-2`
+
+#### Using MessageID as routing key
+
+- it has several benefits:
+  - RabbitMQ client library automatically converts message ID to routing key
+  - can use various data types (long, string, UUID, raw bytes) and any value that is useful to our business case (user id, invoice id etc.)
+  - the library takes care to compute the ID, so that every partition gets message uniformly (as much as possible)
+  - client will guarantee that all messages with the same message ID go to the same partition
+
+### Super stream consumer
+
+- we cannot use `@RabbitListener` for super stream consumers
+- when we have multiple partitions and want to create a single active consumer for each super stream partition, we must set `Environment.maxConsumersByPartition = 1`
